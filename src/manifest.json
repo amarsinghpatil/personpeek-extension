@@ -6,12 +6,19 @@
 
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "sidePanel",
+    "contextMenus"
   ],
+
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
 
   "host_permissions": [
     "https://en.wikipedia.org/*",
-    "https://www.wikidata.org/*"
+    "https://www.wikidata.org/*",
+    "https://news.google.com/*"
   ],
 
   "background": {

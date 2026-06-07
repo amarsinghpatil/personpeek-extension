@@ -1,0 +1,13 @@
+{
+  "name": "personpeek-extension",
+  "version": "1.0.0",
+  "description": "Select any person's name on a webpage to instantly see their public info, photo, and bio.",
+  "scripts": {
+    "build": "tsc && node build.js",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.5"
+  }
+}
