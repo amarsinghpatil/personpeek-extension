@@ -1,0 +1,433 @@
+/* =================================================================
+   PersonPeek — Content Script Styles
+   =================================================================
+   Premium dark glassmorphic design system.
+   All classes are prefixed with .pp- to avoid collisions even though
+   we render inside a closed Shadow DOM.
+   ================================================================= */
+
+/* ------------------------------------------------------------------ */
+/*  Animations                                                         */
+/* ------------------------------------------------------------------ */
+
+@keyframes pp-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pp-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pp-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pp-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes pp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Lookup Button                                                      */
+/* ------------------------------------------------------------------ */
+
+.pp-lookup-btn {
+  position: fixed;
+  z-index: 2147483647;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 20, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #F0F0F5;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(108, 99, 255, 0.15);
+  animation: pp-fadeIn 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+.pp-lookup-btn:hover {
+  transform: scale(1.12);
+  background: rgba(108, 99, 255, 0.25);
+  box-shadow:
+    0 12px 40px rgba(108, 99, 255, 0.3),
+    0 0 0 1px rgba(108, 99, 255, 0.35);
+}
+
+.pp-lookup-btn:active {
+  transform: scale(0.95);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Info Card — Container                                              */
+/* ------------------------------------------------------------------ */
+
+.pp-card {
+  position: fixed;
+  z-index: 2147483647;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  background: rgba(12, 12, 20, 0.95);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(108, 99, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: pp-slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  color: #F0F0F5;
+  overflow: hidden;
+  line-height: 1.5;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.pp-card *,
+.pp-card *::before,
+.pp-card *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Close Button                                                */
+/* ------------------------------------------------------------------ */
+
+.pp-card-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #9A9AB0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  outline: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.pp-card-close:hover {
+  background: rgba(255, 70, 70, 0.18);
+  color: #ff6b6b;
+  transform: rotate(90deg);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Inner Content Area                                          */
+/* ------------------------------------------------------------------ */
+
+.pp-card-inner {
+  padding: 20px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Header (Photo + Name + Description)                         */
+/* ------------------------------------------------------------------ */
+
+.pp-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.pp-card-photo {
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid rgba(108, 99, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.pp-card-photo-placeholder {
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.2), rgba(0, 212, 170, 0.15));
+  border: 2px solid rgba(108, 99, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.pp-card-header-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.pp-card-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #F0F0F5;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  padding-right: 28px; /* room for close button */
+  word-wrap: break-word;
+}
+
+.pp-card-desc {
+  font-size: 13px;
+  color: #9A9AB0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Divider                                                     */
+/* ------------------------------------------------------------------ */
+
+.pp-card-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0 0 14px 0;
+  border: none;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Facts Grid                                                  */
+/* ------------------------------------------------------------------ */
+
+.pp-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pp-card-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12.5px;
+  color: #d0d0e0;
+  transition: background 0.2s ease;
+  line-height: 1.4;
+}
+
+.pp-card-fact:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.pp-card-fact-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pp-card-fact-label {
+  color: #9A9AB0;
+  margin-right: 2px;
+}
+
+.pp-card-fact-value {
+  color: #e0e0f0;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Bio Section                                                 */
+/* ------------------------------------------------------------------ */
+
+.pp-card-bio {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #c8c8d8;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding-right: 4px;
+  word-wrap: break-word;
+}
+
+/* Custom scrollbar for bio */
+.pp-card-bio::-webkit-scrollbar {
+  width: 4px;
+}
+.pp-card-bio::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pp-card-bio::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+.pp-card-bio::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Firefox scrollbar */
+.pp-card-bio {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card — Footer                                                      */
+/* ------------------------------------------------------------------ */
+
+.pp-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 0 -20px -20px -20px;
+}
+
+.pp-card-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6C63FF;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-card-link:hover {
+  color: #8B83FF;
+  text-decoration: underline;
+}
+
+.pp-card-link-arrow {
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.pp-card-link:hover .pp-card-link-arrow {
+  transform: translateX(3px);
+}
+
+.pp-card-source {
+  font-size: 11px;
+  color: #5a5a70;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Loading State                                                      */
+/* ------------------------------------------------------------------ */
+
+.pp-loading {
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.pp-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(108, 99, 255, 0.15);
+  border-top-color: #6C63FF;
+  border-radius: 50%;
+  animation: pp-spin 0.8s linear infinite;
+}
+
+.pp-loading-text {
+  font-size: 13px;
+  color: #9A9AB0;
+  animation: pp-pulse 1.5s ease-in-out infinite;
+}
+
+/* Shimmer placeholders */
+.pp-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 800px 100%;
+  animation: pp-shimmer 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Error / Not-Found State                                            */
+/* ------------------------------------------------------------------ */
+
+.pp-error {
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.pp-error-icon {
+  font-size: 36px;
+  opacity: 0.6;
+}
+
+.pp-error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #d0d0e0;
+}
+
+.pp-error-message {
+  font-size: 13px;
+  color: #9A9AB0;
+  line-height: 1.5;
+  max-width: 280px;
+}
