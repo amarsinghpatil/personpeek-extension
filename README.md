@@ -84,7 +84,7 @@ npm.cmd run build
 
 ## Author
 
-Created and maintained by **Amarsinh Patil**.
+Created and maintained by **Amarsingh Patil**.
 
 ## License
 
