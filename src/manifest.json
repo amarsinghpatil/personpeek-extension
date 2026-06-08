@@ -3,6 +3,7 @@
   "name": "PersonPeek",
   "version": "1.0.0",
   "description": "Select any person's name on a webpage to instantly see their public info, photo, and bio.",
+  "author": "Amarsinh Patil",
 
   "permissions": [
     "activeTab",

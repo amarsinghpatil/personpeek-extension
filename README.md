@@ -79,3 +79,13 @@ npm.cmd run build
 - **Shadow DOM**: Uses a closed Shadow DOM context to completely isolate the extension's CSS styles from the host webpages, preventing conflicts.
 - **Background Service Worker**: Handles all API communications concurrently to avoid CORS policies and page limits.
 - **APIs Used**: Wikipedia OpenSearch & REST Summary APIs (narrative and photos), Wikidata Claim parsing (structured facts like birth dates, occupations), and Google News RSS.
+
+---
+
+## Author
+
+Created and maintained by **Amarsinh Patil**.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details.
