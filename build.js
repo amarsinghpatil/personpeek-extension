@@ -11,16 +11,19 @@ function copyDir(src, dest) {
 
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath);
-    } else if (!entry.name.endsWith('.ts')) {
+    } else if (entry.isFile() && !/\.c?m?tsx?$/i.test(entry.name)) {
       fs.copyFileSync(srcPath, destPath);
     }
   }
 }
 
 try {
-  copyDir('src', 'dist');
+  const srcDir = path.resolve(__dirname, 'src');
+  const destDir = path.resolve(__dirname, 'dist');
+  copyDir(srcDir, destDir);
   console.log('[Build] Successfully copied assets to dist/');
 } catch (err) {
   console.error('[Build] Error copying assets:', err);
   process.exit(1);
 }
+
