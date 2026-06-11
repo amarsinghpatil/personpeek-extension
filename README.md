@@ -28,7 +28,7 @@ You need **Node.js** and **npm** installed on your system to compile the TypeScr
 ### 1. Clone the Repository
 Clone this repository to your local machine:
 ```bash
-git clone https://github.com/YOUR_USERNAME/personpeek-extension.git
+git clone https://github.com/amarsinghpatil/personpeek-extension.git
 cd personpeek-extension
 ```
 

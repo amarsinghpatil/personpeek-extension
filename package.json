@@ -2,6 +2,24 @@
   "name": "personpeek-extension",
   "version": "1.0.0",
   "description": "Select any person's name on a webpage to instantly see their public info, photo, and bio.",
+  "author": "Amarsingh Patil",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amarsinghpatil/personpeek-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amarsinghpatil/personpeek-extension/issues"
+  },
+  "homepage": "https://github.com/amarsinghpatil/personpeek-extension#readme",
+  "keywords": [
+    "chrome-extension",
+    "browser-extension",
+    "wikipedia",
+    "wikidata",
+    "glassmorphism",
+    "biography"
+  ],
   "scripts": {
     "build": "tsc && node build.js",
     "watch": "tsc -w"
