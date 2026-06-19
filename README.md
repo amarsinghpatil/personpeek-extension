@@ -1,7 +1,5 @@
 # PersonPeek 🔍👤
 
-PersonPeek is a premium, glassmorphic browser extension that lets you instantly discover public information about any person on any webpage simply by selecting or double-clicking their name. 
-
 It acts like a **dictionary extension, but for people**, pulling real-time biographical summaries, photos, news, and structured facts from Wikipedia, Wikidata, and Google News.
 
 ---
