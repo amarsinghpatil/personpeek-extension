@@ -11,6 +11,43 @@
 (() => {
   'use strict';
 
+  /* ─── Helper Functions for Security ─── */
+
+  function sanitizeUrl(url: string | undefined): string {
+    if (!url) return '#';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('#')) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://')) {
+        return trimmed;
+      }
+    }
+    return '#';
+  }
+
+  function sanitizeImgSrc(src: string | undefined): string {
+    if (!src) return '';
+    const trimmed = src.trim();
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://') || trimmed.startsWith('data:image/') || trimmed.startsWith('data:')) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+
+
   // ─── Interfaces ───────────────────────────────────────────────
 
   interface HistoryEntry {
@@ -64,6 +101,13 @@
   const clearHistoryBtn  = document.getElementById('clearHistoryBtn') as HTMLButtonElement;
   const recentList       = document.getElementById('recentList') as HTMLUListElement;
 
+  // Settings DOM References
+  const settingsBtn      = document.getElementById('settingsBtn') as HTMLButtonElement;
+  const settingsState    = document.getElementById('settingsState') as HTMLElement;
+  const settingsBackBtn  = document.getElementById('settingsBackBtn') as HTMLButtonElement;
+  const doubleClickToggle = document.getElementById('doubleClickToggle') as HTMLInputElement;
+  const segmentBtns      = document.querySelectorAll('.segment-btn');
+
   // Result card elements
   const resultPhoto = document.getElementById('resultPhoto') as HTMLImageElement;
   const resultName  = document.getElementById('resultName') as HTMLElement;
@@ -72,14 +116,7 @@
   const resultBio   = document.getElementById('resultBio') as HTMLElement;
   const resultLink  = document.getElementById('resultLink') as HTMLAnchorElement;
 
-  // Settings elements
-  const settingsBtn           = document.getElementById('settingsBtn') as HTMLButtonElement;
-  const settingsState         = document.getElementById('settingsState') as HTMLElement;
-  const settingsBackBtn       = document.getElementById('settingsBackBtn') as HTMLButtonElement;
-  const settingsForm          = document.getElementById('settingsForm') as HTMLFormElement;
-  const apiKeyInput           = document.getElementById('apiKeyInput') as HTMLInputElement;
-  const toggleKeyVisibility   = document.getElementById('toggleKeyVisibility') as HTMLButtonElement;
-  const settingsFeedback      = document.getElementById('settingsFeedback') as HTMLElement;
+
 
   // ─── State ────────────────────────────────────────────────────
   /** @type {'idle'|'loading'|'result'|'error'|'settings'} */
@@ -205,7 +242,7 @@
    */
   function renderResult(data: ResultData) {
     // Photo
-    resultPhoto.src = data.thumbnail || PLACEHOLDER_PHOTO;
+    resultPhoto.src = sanitizeImgSrc(data.thumbnail) || PLACEHOLDER_PHOTO;
     resultPhoto.alt = data.title || 'Person photo';
 
     // Handle broken images gracefully
@@ -271,7 +308,7 @@
 
     // Wikipedia link
     if (data.pageUrl) {
-      resultLink.href = data.pageUrl;
+      resultLink.href = sanitizeUrl(data.pageUrl);
       resultLink.classList.remove('hidden');
     } else {
       resultLink.classList.add('hidden');
@@ -394,7 +431,7 @@
         
         const link = document.createElement('a');
         link.className = 'social-chip';
-        link.href = url as string;
+        link.href = sanitizeUrl(url as string);
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.style.setProperty('--chip-color', info.color);
@@ -431,7 +468,7 @@
       newsList.forEach((story) => {
         const item = document.createElement('a');
         item.className = 'news-item';
-        item.href = story.link;
+        item.href = sanitizeUrl(story.link);
         item.target = '_blank';
         item.rel = 'noopener noreferrer';
 
@@ -511,7 +548,7 @@
 
       const img = document.createElement('img');
       img.className = 'popup-recent-thumb';
-      img.src = thumb;
+      img.src = sanitizeImgSrc(thumb);
       img.alt = displayName;
       img.addEventListener('error', () => {
         img.src = PLACEHOLDER_PHOTO;
@@ -583,6 +620,43 @@
     searchInput.focus();
   });
 
+  // Settings Button -> Open Settings
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      setView('settings');
+    });
+  }
+
+  // Settings Back Button -> Return to Search/Recent view
+  if (settingsBackBtn) {
+    settingsBackBtn.addEventListener('click', () => {
+      setView('idle');
+      searchInput.focus();
+    });
+  }
+
+  // Toggle Double-Click Search setting
+  if (doubleClickToggle) {
+    doubleClickToggle.addEventListener('change', () => {
+      chrome.storage.local.set({ enableDoubleClick: doubleClickToggle.checked });
+    });
+  }
+
+  // Toggle Preferred Display Mode settings
+  segmentBtns.forEach((btnNode) => {
+    const btn = btnNode as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode;
+      
+      // Update UI selection classes
+      segmentBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // Save setting to storage
+      chrome.storage.local.set({ useSidePanel: mode === 'panel' });
+    });
+  });
+
   // ─── Helpers ──────────────────────────────────────────────────
 
   /**
@@ -595,70 +669,7 @@
     return str.slice(0, max).trimEnd() + '…';
   }
 
-  // ─── Settings ──────────────────────────────────────────────────
 
-  settingsBtn.addEventListener('click', () => {
-    setView('settings');
-    loadSettings();
-  });
-
-  settingsBackBtn.addEventListener('click', () => {
-    setView('idle');
-  });
-
-  toggleKeyVisibility.addEventListener('click', () => {
-    if (apiKeyInput.type === 'password') {
-      apiKeyInput.type = 'text';
-      toggleKeyVisibility.textContent = '🔒';
-    } else {
-      apiKeyInput.type = 'password';
-      toggleKeyVisibility.textContent = '👁️';
-    }
-  });
-
-  async function loadSettings() {
-    try {
-      const { geminiApiKey } = await chrome.storage.local.get('geminiApiKey');
-      if (geminiApiKey) {
-        apiKeyInput.value = geminiApiKey;
-      } else {
-        apiKeyInput.value = '';
-      }
-    } catch (err) {
-      console.error('[PersonPeek] Failed to load settings:', err);
-    }
-  }
-
-  settingsForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const key = apiKeyInput.value.trim();
-    try {
-      await chrome.storage.local.set({ geminiApiKey: key });
-      showSettingsFeedback('Settings saved!');
-    } catch (err) {
-      console.error('[PersonPeek] Failed to save API key:', err);
-      showSettingsFeedback('Failed to save settings.', true);
-    }
-  });
-
-  let feedbackTimer: any = null;
-  function showSettingsFeedback(message: string, isError = false) {
-    clearTimeout(feedbackTimer);
-    settingsFeedback.textContent = message;
-    if (isError) {
-      settingsFeedback.style.background = 'rgba(255, 107, 107, 0.08)';
-      settingsFeedback.style.border = '1px solid rgba(255, 107, 107, 0.2)';
-      settingsFeedback.style.color = 'var(--danger)';
-    } else {
-      settingsFeedback.style.background = 'rgba(0, 212, 170, 0.08)';
-      settingsFeedback.style.border = '1px solid rgba(0, 212, 170, 0.2)';
-      settingsFeedback.style.color = 'var(--secondary)';
-    }
-    settingsFeedback.classList.remove('hidden');
-    feedbackTimer = setTimeout(() => {
-      settingsFeedback.classList.add('hidden');
-    }, 2000);
-  }
 
   // ─── Initialization ──────────────────────────────────────────
 
@@ -670,6 +681,25 @@
   async function init() {
     // Auto-focus the search input for immediate typing
     searchInput.focus();
+
+    // Load initial settings configurations from storage
+    try {
+      const { enableDoubleClick = true, useSidePanel = false } = await chrome.storage.local.get(['enableDoubleClick', 'useSidePanel']);
+      if (doubleClickToggle) {
+        doubleClickToggle.checked = enableDoubleClick;
+      }
+      segmentBtns.forEach((btnNode) => {
+        const btn = btnNode as HTMLButtonElement;
+        const mode = btn.dataset.mode;
+        if ((mode === 'panel' && useSidePanel) || (mode === 'card' && !useSidePanel)) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    } catch (err) {
+      console.warn('[PersonPeek] Failed to load settings in popup init:', err);
+    }
 
     // Load recent lookups (shows empty state if none)
     setView('idle');

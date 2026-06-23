@@ -8,6 +8,43 @@
 (() => {
   'use strict';
 
+  /* ─── Helper Functions for Security ─── */
+
+  function sanitizeUrl(url: string | undefined): string {
+    if (!url) return '#';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('#')) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://')) {
+        return trimmed;
+      }
+    }
+    return '#';
+  }
+
+  function sanitizeImgSrc(src: string | undefined): string {
+    if (!src) return '';
+    const trimmed = src.trim();
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://') || trimmed.startsWith('data:image/') || trimmed.startsWith('data:')) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+
+
   // ─── Interfaces ───────────────────────────────────────────────
 
   interface HistoryEntry {
@@ -69,27 +106,19 @@
   const resultBio   = document.getElementById('resultBio') as HTMLElement;
   const resultLink  = document.getElementById('resultLink') as HTMLAnchorElement;
 
-  // Settings elements
-  const settingsBtn           = document.getElementById('settingsBtn') as HTMLButtonElement;
-  const settingsState         = document.getElementById('settingsState') as HTMLElement;
-  const settingsBackBtn       = document.getElementById('settingsBackBtn') as HTMLButtonElement;
-  const settingsForm          = document.getElementById('settingsForm') as HTMLFormElement;
-  const apiKeyInput           = document.getElementById('apiKeyInput') as HTMLInputElement;
-  const toggleKeyVisibility   = document.getElementById('toggleKeyVisibility') as HTMLButtonElement;
-  const settingsFeedback      = document.getElementById('settingsFeedback') as HTMLElement;
+
 
   // ─── State ────────────────────────────────────────────────────
-  /** @type {'idle'|'loading'|'result'|'error'|'settings'} */
-  let currentView: 'idle' | 'loading' | 'result' | 'error' | 'settings' = 'idle';
+  /** @type {'idle'|'loading'|'result'|'error'} */
+  let currentView: 'idle' | 'loading' | 'result' | 'error' = 'idle';
 
   // ─── Utility: Show / Hide Sections ───────────────────────────
-  function setView(view: 'idle' | 'loading' | 'result' | 'error' | 'settings') {
+  function setView(view: 'idle' | 'loading' | 'result' | 'error') {
     currentView = view;
 
     loadingState.classList.add('hidden');
     errorState.classList.add('hidden');
     resultState.classList.add('hidden');
-    settingsState.classList.add('hidden');
 
     switch (view) {
       case 'loading':
@@ -106,12 +135,6 @@
 
       case 'error':
         errorState.classList.remove('hidden');
-        recentState.classList.add('hidden');
-        emptyState.classList.add('hidden');
-        break;
-
-      case 'settings':
-        settingsState.classList.remove('hidden');
         recentState.classList.add('hidden');
         emptyState.classList.add('hidden');
         break;
@@ -176,7 +199,7 @@
   );
 
   function renderResult(data: ResultData) {
-    resultPhoto.src = data.thumbnail || PLACEHOLDER_PHOTO;
+    resultPhoto.src = sanitizeImgSrc(data.thumbnail) || PLACEHOLDER_PHOTO;
     resultPhoto.alt = data.title || 'Person photo';
 
     resultPhoto.onerror = () => {
@@ -240,7 +263,7 @@
 
     // Wikipedia link
     if (data.pageUrl) {
-      resultLink.href = data.pageUrl;
+      resultLink.href = sanitizeUrl(data.pageUrl);
       resultLink.classList.remove('hidden');
     } else {
       resultLink.classList.add('hidden');
@@ -361,7 +384,7 @@
         
         const link = document.createElement('a');
         link.className = 'social-chip';
-        link.href = url as string;
+        link.href = sanitizeUrl(url as string);
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.style.setProperty('--chip-color', info.color);
@@ -398,7 +421,7 @@
       newsList.forEach((story) => {
         const item = document.createElement('a');
         item.className = 'news-item';
-        item.href = story.link;
+        item.href = sanitizeUrl(story.link);
         item.target = '_blank';
         item.rel = 'noopener noreferrer';
 
@@ -466,7 +489,7 @@
 
       const img = document.createElement('img');
       img.className = 'panel-recent-thumb';
-      img.src = thumb;
+      img.src = sanitizeImgSrc(thumb);
       img.alt = displayName;
       img.addEventListener('error', () => {
         img.src = PLACEHOLDER_PHOTO;
@@ -538,69 +561,7 @@
     return str.slice(0, max).trimEnd() + '…';
   }
 
-  // ─── Settings ──────────────────────────────────────────────────
-  settingsBtn.addEventListener('click', () => {
-    setView('settings');
-    loadSettings();
-  });
 
-  settingsBackBtn.addEventListener('click', () => {
-    setView('idle');
-  });
-
-  toggleKeyVisibility.addEventListener('click', () => {
-    if (apiKeyInput.type === 'password') {
-      apiKeyInput.type = 'text';
-      toggleKeyVisibility.textContent = '🔒';
-    } else {
-      apiKeyInput.type = 'password';
-      toggleKeyVisibility.textContent = '👁️';
-    }
-  });
-
-  async function loadSettings() {
-    try {
-      const { geminiApiKey } = await chrome.storage.local.get('geminiApiKey');
-      if (geminiApiKey) {
-        apiKeyInput.value = geminiApiKey;
-      } else {
-        apiKeyInput.value = '';
-      }
-    } catch (err) {
-      console.error('[PersonPeek] Failed to load settings:', err);
-    }
-  }
-
-  settingsForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const key = apiKeyInput.value.trim();
-    try {
-      await chrome.storage.local.set({ geminiApiKey: key });
-      showSettingsFeedback('Settings saved!');
-    } catch (err) {
-      console.error('[PersonPeek] Failed to save API key:', err);
-      showSettingsFeedback('Failed to save settings.', true);
-    }
-  });
-
-  let feedbackTimer: any = null;
-  function showSettingsFeedback(message: string, isError = false) {
-    clearTimeout(feedbackTimer);
-    settingsFeedback.textContent = message;
-    if (isError) {
-      settingsFeedback.style.background = 'rgba(255, 107, 107, 0.08)';
-      settingsFeedback.style.border = '1px solid rgba(255, 107, 107, 0.2)';
-      settingsFeedback.style.color = 'var(--danger)';
-    } else {
-      settingsFeedback.style.background = 'rgba(0, 212, 170, 0.08)';
-      settingsFeedback.style.border = '1px solid rgba(0, 212, 170, 0.2)';
-      settingsFeedback.style.color = 'var(--secondary)';
-    }
-    settingsFeedback.classList.remove('hidden');
-    feedbackTimer = setTimeout(() => {
-      settingsFeedback.classList.add('hidden');
-    }, 2000);
-  }
 
   // ─── Initialization ──────────────────────────────────────────
   async function init() {

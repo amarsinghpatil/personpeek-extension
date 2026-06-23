@@ -31,25 +31,104 @@ if ((window as any).__personPeekInjected) {
 
   const shadow = hostEl.attachShadow({ mode: 'closed' });
 
-  /** Load our stylesheet into the shadow root */
-  (function injectStyles() {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = chrome.runtime.getURL('content/content.css');
-    shadow.appendChild(link);
-  })();
+  /** Load our stylesheet into the shadow root, bypassing host-page CSP style-src where possible */
+  async function injectStyles() {
+    try {
+      const cssUrl = chrome.runtime.getURL('content/content.css');
+      const res = await fetch(cssUrl);
+      if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+      const cssText = await res.text();
+      const style = document.createElement('style');
+      style.textContent = cssText;
+      shadow.appendChild(style);
+    } catch (err) {
+      console.warn('[PersonPeek] Failed to inject styles as inline block, falling back to link element:', err);
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = chrome.runtime.getURL('content/content.css');
+      shadow.appendChild(link);
+    }
+  }
 
   /* ---------------------------------------------------------------- */
   /*  Configuration & State                                            */
   /* ---------------------------------------------------------------- */
 
-  const USE_SIDE_PANEL = false;  // Toggle to switch between side panel (Option 1) and inline card
+  let useSidePanel = false;      // Dynamically loaded from storage
+  let enableDoubleClick = true;  // Dynamically loaded from storage
 
   let isDoubleClick = false;    // flag to prevent mouseup from also firing
   let activeCard: HTMLElement | null = null;        // reference to the currently-open card element
   let activeBtn: HTMLButtonElement | null = null;         // reference to the floating lookup button
   let scrollDismissTimer: any = null;
   let lastDraggedPosition: { left: number; top: number } | null = null; // Tracks the last user-dragged position of the card
+
+  /** Load user preferences from storage */
+  async function loadPreferences() {
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.runtime?.id) {
+      return;
+    }
+    try {
+      const prefs = await chrome.storage.local.get(['enableDoubleClick', 'useSidePanel']);
+      if (prefs.enableDoubleClick !== undefined) enableDoubleClick = prefs.enableDoubleClick;
+      if (prefs.useSidePanel !== undefined) useSidePanel = prefs.useSidePanel;
+    } catch (err) {
+      console.warn('[PersonPeek] Failed to load preferences:', err);
+    }
+  }
+
+  // Initialize styling and configurations
+  injectStyles();
+  loadPreferences();
+
+  // Listen for real-time setting updates
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local') {
+        if (changes.enableDoubleClick) {
+          enableDoubleClick = changes.enableDoubleClick.newValue;
+        }
+        if (changes.useSidePanel) {
+          useSidePanel = changes.useSidePanel.newValue;
+        }
+      }
+    });
+  }
+
+  /* ─── Sanitization Helpers ─── */
+
+  function sanitizeUrl(url: string | undefined): string {
+    if (!url) return '#';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('#')) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://')) {
+        return trimmed;
+      }
+    }
+    return '#';
+  }
+
+  function sanitizeImgSrc(src: string | undefined): string {
+    if (!src) return '';
+    const trimmed = src.trim();
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch {
+      if (trimmed.startsWith('chrome-extension://') || trimmed.startsWith('data:image/') || trimmed.startsWith('data:')) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
 
   /**
    * Helper to check if the side panel is open, catching context invalidation errors.
@@ -340,7 +419,7 @@ if ((window as any).__personPeekInjected) {
       e.preventDefault();
       e.stopPropagation();
       removeLookupBtn();
-      if (USE_SIDE_PANEL) {
+      if (useSidePanel) {
         checkSidePanelOpen((isSidePanelOpen) => {
           if (isSidePanelOpen) {
             safeSetLookupName(text, context);
@@ -526,7 +605,7 @@ if ((window as any).__personPeekInjected) {
     if (data.thumbnail) {
       const img = document.createElement('img');
       img.className = 'pp-card-photo';
-      img.src = data.thumbnail;
+      img.src = sanitizeImgSrc(data.thumbnail);
       img.alt = data.title || '';
       header.appendChild(img);
     } else {
@@ -688,7 +767,7 @@ if ((window as any).__personPeekInjected) {
 
     const link = document.createElement('a');
     link.className = 'pp-card-link';
-    link.href = data.pageUrl || '#';
+    link.href = sanitizeUrl(data.pageUrl) || '#';
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.textContent = 'Read more on Wikipedia';
@@ -733,7 +812,7 @@ if ((window as any).__personPeekInjected) {
         
         const socialLink = document.createElement('a');
         socialLink.className = 'pp-social-chip';
-        socialLink.href = url as string;
+        socialLink.href = sanitizeUrl(url as string);
         socialLink.target = '_blank';
         socialLink.rel = 'noopener noreferrer';
         socialLink.style.setProperty('--chip-color', info.color);
@@ -769,7 +848,7 @@ if ((window as any).__personPeekInjected) {
       newsList.forEach((story: any) => {
         const item = document.createElement('a');
         item.className = 'pp-news-item';
-        item.href = story.link;
+        item.href = sanitizeUrl(story.link);
         item.target = '_blank';
         item.rel = 'noopener noreferrer';
 
@@ -819,6 +898,8 @@ if ((window as any).__personPeekInjected) {
    * DOUBLE-CLICK — directly show the info card (skip the lookup button).
    */
   document.addEventListener('dblclick', (e) => {
+    if (!enableDoubleClick) return;
+
     // Ignore clicks on input/textarea/contenteditable
     if (isInteractiveElement(e.target)) return;
 
@@ -838,7 +919,7 @@ if ((window as any).__personPeekInjected) {
     const rect = range.getBoundingClientRect();
     const context = getSelectionContext(sel);
 
-    if (USE_SIDE_PANEL) {
+    if (useSidePanel) {
       checkSidePanelOpen((isSidePanelOpen) => {
         if (isSidePanelOpen) {
           safeSetLookupName(text, context);
@@ -881,7 +962,7 @@ if ((window as any).__personPeekInjected) {
 
     // Trigger details card or side panel directly inside next execution frame
     setTimeout(() => {
-      if (USE_SIDE_PANEL) {
+      if (useSidePanel) {
         checkSidePanelOpen((isSidePanelOpen) => {
           if (isSidePanelOpen) {
             safeSetLookupName(text, context);

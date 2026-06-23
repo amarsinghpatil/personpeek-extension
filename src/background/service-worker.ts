@@ -107,6 +107,25 @@
     });
   }
 
+
+
+  /* ─── Rate Limiter ─── */
+  const RATE_LIMIT = { MAX_REQUESTS_PER_MINUTE: 20, WINDOW_SIZE_MS: 60000 };
+  const requestTimestamps = new Map<string, number[]>();
+
+  function isRateLimited(action: string): boolean {
+    const now = Date.now();
+    const timestamps = requestTimestamps.get(action) || [];
+    const windowStart = now - RATE_LIMIT.WINDOW_SIZE_MS;
+    const recentRequests = timestamps.filter(t => t > windowStart);
+    if (recentRequests.length >= RATE_LIMIT.MAX_REQUESTS_PER_MINUTE) {
+      return true;
+    }
+    recentRequests.push(now);
+    requestTimestamps.set(action, recentRequests);
+    return false;
+  }
+
   /**
    * Extract a human-readable date string from a Wikidata time claim value.
    * Wikidata stores dates as "+YYYY-MM-DDT00:00:00Z".
@@ -130,14 +149,12 @@
     }
   }
 
-  /**
-   * Safely retrieve a property from an object, preventing prototype pollution.
-   * @param obj The source object.
-   * @param key The key to retrieve.
-   */
   function safeGet(obj: any, key: string): any {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      return undefined;
+    }
     if (obj && key && Object.prototype.hasOwnProperty.call(obj, key)) {
-      return Reflect.get(obj, key);
+      return obj[key];
     }
     return undefined;
   }
@@ -352,20 +369,45 @@
    * Designed to run securely and fast in a service worker environment.
    * @param xmlText XML response payload.
    */
+  function getTagContent(xml: string, tag: string, startFrom = 0): { content: string; nextIndex: number } | null {
+    const openTag = `<${tag}`;
+    const closeTag = `</${tag}>`;
+    
+    const startIndex = xml.indexOf(openTag, startFrom);
+    if (startIndex === -1) return null;
+    
+    const openTagCloseBracket = xml.indexOf('>', startIndex);
+    if (openTagCloseBracket === -1) return null;
+    
+    const endIndex = xml.indexOf(closeTag, openTagCloseBracket);
+    if (endIndex === -1) return null;
+    
+    const content = xml.substring(openTagCloseBracket + 1, endIndex);
+    return {
+      content,
+      nextIndex: endIndex + closeTag.length
+    };
+  }
+
   function parseNewsRSS(xmlText: string): NewsItem[] {
     const items: NewsItem[] = [];
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let match: RegExpExecArray | null;
-    while ((match = itemRegex.exec(xmlText)) !== null && items.length < 3) {
-      const content = match[1];
-      const titleMatch = content.match(/<title>([\s\S]*?)<\/title>/);
-      const linkMatch = content.match(/<link>([\s\S]*?)<\/link>/);
-      const pubDateMatch = content.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-      const sourceMatch = content.match(/<source[^>]*>([\s\S]*?)<\/source>/);
-
-      if (titleMatch && linkMatch) {
-        let title = titleMatch[1];
-        let source = sourceMatch ? sourceMatch[1] : '';
+    let currentIndex = 0;
+    
+    while (items.length < 3) {
+      const itemData = getTagContent(xmlText, 'item', currentIndex);
+      if (!itemData) break;
+      
+      const itemXml = itemData.content;
+      currentIndex = itemData.nextIndex;
+      
+      const titleData = getTagContent(itemXml, 'title');
+      const linkData = getTagContent(itemXml, 'link');
+      const pubDateData = getTagContent(itemXml, 'pubDate');
+      const sourceData = getTagContent(itemXml, 'source');
+      
+      if (titleData && linkData) {
+        let title = titleData.content;
+        let source = sourceData ? sourceData.content : '';
         
         // Clean up XML entity encodings
         const decodeEntities = (str: string): string => {
@@ -388,14 +430,15 @@
 
         // Parse date to clean format e.g. "Jun 7, 2026"
         let dateLabel = '';
-        if (pubDateMatch) {
-          const rawDate = decodeEntities(pubDateMatch[1]);
+        if (pubDateData) {
+          const rawDate = decodeEntities(pubDateData.content);
           try {
             const d = new Date(rawDate);
             if (!isNaN(d.getTime())) {
               dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             } else {
-              dateLabel = rawDate.split(' ')[0] + ' ' + rawDate.split(' ')[1];
+              const parts = rawDate.split(' ');
+              dateLabel = parts[0] + ' ' + parts[1];
             }
           } catch {
             dateLabel = rawDate;
@@ -404,7 +447,7 @@
 
         items.push({
           title: title.trim(),
-          link: decodeEntities(linkMatch[1]).trim(),
+          link: decodeEntities(linkData.content).trim(),
           pubDate: dateLabel.trim(),
           source: source.trim()
         });
@@ -435,78 +478,8 @@
   /*  Core lookup flow                                                   */
   /* ------------------------------------------------------------------ */
 
-  /**
-   * Resolve ambiguous name to canonical person name using Gemini Flash API
-   * @param name The highlighted word/phrase.
-   * @param context Surrounding text.
-   * @param apiKey Gemini Flash API Key.
-   */
-  async function resolveEntityName(name: string, context: string, apiKey: string): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    
-    const systemInstruction = 
-      "You are a context-aware entity resolution assistant. Given a highlighted term and its surrounding context, " +
-      "resolve the canonical name of the specific person being referred to. Output ONLY the resolved name, and nothing else. " +
-      "If it is not a person or cannot be resolved, output the original term exactly as is. Output nothing else.";
-
-    const prompt = `Term: "${name}"\nContext: "${context}"\nResolved Name:`;
-
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            { text: systemInstruction },
-            { text: prompt }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 20
-      }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini API returned status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (candidateText) {
-      return candidateText.trim();
-    }
-    return name;
-  }
-
-  /**
-   * Full lookup pipeline: search → summary → wikidata facts + socials + news.
-   * @param name Search query.
-   * @param context Context surrounding the term.
-   */
-  async function lookupPerson(name: string, context?: string): Promise<LookupResult | { error: string }> {
-    let searchName = name;
-    if (context && name) {
-      try {
-        const { geminiApiKey } = await chrome.storage.local.get('geminiApiKey');
-        if (geminiApiKey && geminiApiKey.trim()) {
-          const resolved = await resolveEntityName(name, context, geminiApiKey);
-          if (resolved && resolved.trim()) {
-            console.log(`[PersonPeek] Gemini resolved "${name}" in context to "${resolved}"`);
-            searchName = resolved.trim();
-          }
-        }
-      } catch (err: any) {
-        console.warn('[PersonPeek] Gemini resolution failed, falling back:', err.message);
-      }
-    }
+  async function lookupPerson(name: string, _context?: string): Promise<LookupResult | { error: string }> {
+    const searchName = name;
 
     // Step 1 — search for the best Wikipedia article
     const title = await searchWikipedia(searchName);
@@ -626,6 +599,10 @@
 
     switch (action) {
       case 'lookupPerson':
+        if (isRateLimited('lookupPerson')) {
+          sendResponse({ error: 'Rate limit exceeded. Please wait a moment before trying again.' });
+          return true;
+        }
         lookupPerson(name, context)
           .then(sendResponse)
           .catch((err: any) => {
